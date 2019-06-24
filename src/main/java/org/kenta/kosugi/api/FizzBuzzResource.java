@@ -44,7 +44,7 @@ public class FizzBuzzResource {
     @GET
     @Path("/isfizzbuzz/{i}")
     public boolean isFizzBuzz(@PathParam("i") int i) {
-        return this.isBuzz(i) && this.isBuzz(i);
+        return this.isFizz(i) && this.isBuzz(i);
     }
 
     /**
