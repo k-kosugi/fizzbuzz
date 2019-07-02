@@ -235,4 +235,46 @@ public class FizzBuzzResourceTest {
         assertEquals("16", target.fizzbuzz(16));
     }
 
+    @Test
+    public void fizzbuzz007(){
+        var target = new FizzBuzzResource();
+
+        assertEquals("2", target.fizzbuzz(2));
+    }
+
+    @Test
+    public void fizzbuzz008(){
+        var target = new FizzBuzzResource();
+
+        assertEquals("Fizz", target.fizzbuzz(3));
+    }
+
+    @Test
+    public void fizzbuzz009(){
+        var target = new FizzBuzzResource();
+
+        assertEquals("4", target.fizzbuzz(4));
+    }
+
+    @Test
+    public void fizzbuzz010(){
+        var target = new FizzBuzzResource();
+
+        assertEquals("Buzz", target.fizzbuzz(5));
+    }
+
+    @Test
+    public void fizzbuzz011(){
+        var target = new FizzBuzzResource();
+
+        assertEquals("Fizz", target.fizzbuzz(6));
+    }
+
+    @Test
+    public void fizzbuzz012(){
+        var target = new FizzBuzzResource();
+
+        assertEquals("7", target.fizzbuzz(7));
+    }
+
 }
