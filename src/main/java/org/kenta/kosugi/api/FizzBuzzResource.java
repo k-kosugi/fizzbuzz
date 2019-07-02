@@ -10,7 +10,8 @@ import javax.ws.rs.core.MediaType;
 @Produces(MediaType.APPLICATION_JSON)
 public class FizzBuzzResource {
 
-    private static final int FIZZ = 3;
+    // 誰かがFIZZ変数を3から6に変更
+    private static final int FIZZ = 6;
 
     private static final int BUZZ = 5;
 
