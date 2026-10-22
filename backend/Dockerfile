@@ -19,9 +19,18 @@ RUN ./mvnw -B -q package -DskipTests \
     && java -Djarmode=tools -jar target/app.jar extract --layers --destination extracted
 
 # ---- runtime ----
-# distroless: シェルやパッケージマネージャーを含まない
-FROM mcr.microsoft.com/openjdk/jdk:25-distroless
+# Microsoft 公式の JDK イメージには、アプリが使わない Go 製ツール (/usr/bin/jaz) が同梱されており、
+# その Go 標準ライブラリの脆弱性を Trivy が検出する。そのため、JDK 本体だけを distroless/base にコピーして使う。
+FROM mcr.microsoft.com/openjdk/jdk:25-azurelinux AS jdk
+
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0
 WORKDIR /app
+
+ENV JAVA_HOME=/usr/lib/jvm/msopenjdk-25
+COPY --from=jdk /usr/lib/jvm/msopenjdk-25 ${JAVA_HOME}
+# JDK が必要とする zlib は distroless/base に含まれないため、JDK イメージからコピーする
+COPY --from=jdk /usr/lib/libz.so.1.3.2 /usr/lib/libz.so.1.3.2
+COPY --from=jdk /usr/lib/libz.so.1 /usr/lib/libz.so.1
 
 # 変更頻度の低い層から順にコピーし、イメージのキャッシュを効かせる
 COPY --from=build /workspace/extracted/dependencies/ ./
@@ -29,8 +38,9 @@ COPY --from=build /workspace/extracted/spring-boot-loader/ ./
 COPY --from=build /workspace/extracted/snapshot-dependencies/ ./
 COPY --from=build /workspace/extracted/application/ ./
 
-# Kubernetes の runAsNonRoot で検証できるよう、ユーザーは数値で指定する (ベースイメージの app ユーザー)
+# Kubernetes の runAsNonRoot で検証できるよう、ユーザーは数値で指定する。
+# distroless/base に app ユーザーは無いが、UID を指定すれば非 root で実行できる
 USER 101
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/usr/lib/jvm/msopenjdk-25/bin/java", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/app.jar"]
