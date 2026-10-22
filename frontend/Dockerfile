@@ -13,6 +13,8 @@ RUN npm run build
 
 # ---- runtime ----
 FROM mcr.microsoft.com/azurelinux/base/nginx:1.30
+LABEL org.opencontainers.image.source="https://github.com/k-kosugi/fizzbuzz" \
+      org.opencontainers.image.title="fizzbuzz-frontend"
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /workspace/dist /usr/share/nginx/html

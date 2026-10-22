@@ -24,6 +24,8 @@ RUN ./mvnw -B -q package -DskipTests \
 FROM mcr.microsoft.com/openjdk/jdk:25-azurelinux AS jdk
 
 FROM mcr.microsoft.com/azurelinux/distroless/base:3.0
+LABEL org.opencontainers.image.source="https://github.com/k-kosugi/fizzbuzz" \
+      org.opencontainers.image.title="fizzbuzz-backend"
 WORKDIR /app
 
 ENV JAVA_HOME=/usr/lib/jvm/msopenjdk-25
