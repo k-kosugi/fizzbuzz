@@ -49,15 +49,18 @@ jobs:
             backend/target/failsafe-reports
 
   image:
-    name: Build and scan image
+    name: Build, scan and push image
     needs: verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Azure への OIDC ログイン (push のときだけ使う) に必要
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # push はしない。レジストリへの push と配備は、別のワークフローで行う
       - name: Build image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -75,3 +78,31 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+
+      # 以降は main ブランチへの push のときだけ実行する (PR はスキャンまで)。
+      # スキャンに成功したイメージと同一のものを push する
+      - name: Log in to Azure
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_BUILD_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Push image to ACR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME"
+          IMAGE="${ACR_NAME}.azurecr.io/fizzbuzz-backend:${GITHUB_SHA}"
+          docker tag fizzbuzz-backend:ci "$IMAGE"
+          docker push "$IMAGE"
+          DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          {
+            echo "### backend image"
+            echo '```'
+            echo "$DIGEST"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

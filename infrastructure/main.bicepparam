@@ -9,8 +9,8 @@ param adminGroupObjectIds = []
 
 // GitHub Actions の OIDC を信頼するオーナー。リポジトリは限定しないので、リポジトリを増やしても ID の追加は不要。
 // 数値 ID は gh api users/<オーナー名> --jq .id で取得できる
-param githubOwner = 'kentakosugi_microsoft'
-param githubOwnerId = '232983644'
+param githubOwner = 'k-kosugi'
+param githubOwnerId = '17643197'
 // 空以外にすると、job_workflow_ref が一致するワークフロー (例: 共通のデプロイ用ワークフロー) だけに限定できる
 // 例: 'kentakosugi_microsoft/platform/.github/workflows/*@refs/heads/main'
 param githubWorkflowRefPattern = ''

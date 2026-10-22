@@ -41,6 +41,14 @@ param quotaCpuLimit string = '3000m'
 param quotaMemoryRequest string = '3Gi'
 param quotaMemoryLimit string = '6Gi'
 
+@description('namespace に入ってくる通信のポリシー (必須)。AllowSameNamespace は同じ namespace 内からのみ許可する。Ingress コントローラーなど他の namespace から受けるときは、AllowAll か別途 NetworkPolicy が必要')
+@allowed(['DenyAll', 'AllowAll', 'AllowSameNamespace'])
+param networkIngress string = 'AllowSameNamespace'
+
+@description('namespace から出ていく通信のポリシー (必須)')
+@allowed(['DenyAll', 'AllowAll', 'AllowSameNamespace'])
+param networkEgress string = 'AllowAll'
+
 // 組み込みロール
 var clusterUserRoleId = '4abbcc35-e782-43d8-92c5-2d3f1bd2253f' // Azure Kubernetes Service Cluster User Role
 var rbacWriterRoleId = 'a7ffa36f-339b-4b5c-8bdf-e2c188b2c0eb' // Azure Kubernetes Service RBAC Writer
@@ -80,6 +88,12 @@ resource namespace 'Microsoft.ContainerService/managedClusters/managedNamespaces
   location: location
   tags: tags
   properties: {
+    adoptionPolicy: 'Never'
+    deletePolicy: 'Keep'
+    defaultNetworkPolicy: {
+      ingress: networkIngress
+      egress: networkEgress
+    }
     defaultResourceQuota: {
       cpuRequest: quotaCpuRequest
       cpuLimit: quotaCpuLimit
