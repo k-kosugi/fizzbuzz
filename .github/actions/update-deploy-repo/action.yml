@@ -1,0 +1,91 @@
+name: Update image digest in the deploy repository
+description: >-
+  配備用リポジトリの clusters/<環境名>/kustomization.yaml にある、指定したイメージの digest を書き換えて main にコミットする。
+  Flux がそのコミットを検知して、クラスターに反映する。
+
+inputs:
+  deploy-repository:
+    description: 配備用リポジトリ (owner/repo)
+    required: true
+  ssh-key:
+    description: 配備用リポジトリに書き込めるデプロイキーの秘密鍵 (そのリポジトリだけに登録した、読み書き可のキー)
+    required: true
+  environment:
+    description: 環境名。clusters/<環境名>/kustomization.yaml を更新する
+    required: true
+  image-name:
+    description: kustomization.yaml の images にあるイメージ名 (例 fizzbuzz-backend)
+    required: true
+  digest:
+    description: 配備するイメージの digest (sha256:...)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Update digest and push
+      shell: bash
+      env:
+        DEPLOY_REPO: ${{ inputs.deploy-repository }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        DIGEST: ${{ inputs.digest }}
+        SOURCE_REPO: ${{ github.repository }}
+        SOURCE_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        KEY="$RUNNER_TEMP/deploy_key"
+        KNOWN_HOSTS="$RUNNER_TEMP/known_hosts"
+        WORK="$RUNNER_TEMP/deploy"
+        trap 'rm -rf "$KEY" "$WORK"' EXIT
+
+        (umask 077; printf '%s\n' "$SSH_KEY" > "$KEY")
+
+        # GitHub が公開している SSH のホスト鍵 (HTTPS の API で取得) を信頼し、それ以外の相手には接続しない
+        curl -fsS https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > "$KNOWN_HOSTS"
+        export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o StrictHostKeyChecking=yes"
+
+        git clone --quiet --depth 1 "git@github.com:${DEPLOY_REPO}.git" "$WORK"
+        cd "$WORK"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        FILE="clusters/${ENVIRONMENT}/kustomization.yaml"
+        SHORT="${DIGEST:0:19}"
+
+        # 同時に別のワークフロー (backend と frontend) が更新すると push が競合するため、最新を取り直して再適用する
+        for attempt in 1 2 3 4 5; do
+          result="$(python3 "$GITHUB_ACTION_PATH/update-image-digest.py" "$FILE" "$IMAGE_NAME" "$DIGEST")"
+          if [ "$result" = "unchanged" ]; then
+            echo "Already up to date: ${IMAGE_NAME} ${DIGEST}"
+            exit 0
+          fi
+
+          git add "$FILE"
+          git commit --quiet -m "${ENVIRONMENT}: update ${IMAGE_NAME} to ${SHORT}..." \
+            -m "Source: https://github.com/${SOURCE_REPO}/commit/${SOURCE_SHA}" \
+            -m "Digest: ${DIGEST}"
+
+          if git push --quiet origin HEAD:main; then
+            echo "Updated ${FILE}: ${IMAGE_NAME} -> ${DIGEST}"
+            {
+              echo "### Deployment manifest updated"
+              echo ""
+              echo "- repository: \`${DEPLOY_REPO}\`"
+              echo "- file: \`${FILE}\`"
+              echo "- image: \`${IMAGE_NAME}\`"
+              echo "- digest: \`${DIGEST}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "push rejected (attempt ${attempt}); fetching the latest and retrying"
+          git fetch --quiet --depth 1 origin main
+          git reset --quiet --hard FETCH_HEAD
+          sleep $((attempt * 2))
+        done
+
+        echo "failed to push after retries" >&2
+        exit 1
