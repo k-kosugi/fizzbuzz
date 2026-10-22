@@ -1,0 +1,139 @@
+openapi: 3.1.0
+info:
+  title: FizzBuzz API
+  version: 2.0.0
+paths:
+  /api/fizzbuzz:
+    post:
+      operationId: registerFizzBuzz
+      summary: 数値を指定して FizzBuzz を 1 件保存する
+      description: >-
+        指定した数値の FizzBuzz を保存し、結果を返す。
+        FizzBuzz の識別子は数値なので、保存済みの数値は重複せず 1 件のままとなる。
+        保存に成功した場合のみ結果を返す。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [number]
+              properties:
+                number:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  maximum: 2147483647
+                  description: 保存する数値
+            example: {number: 15}
+      responses:
+        '201':
+          description: 保存に成功した場合のみ返す。取得先を Location ヘッダーで返す
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FizzBuzz'
+              example: {number: 15, value: FizzBuzz}
+        '400':
+          description: number が未指定、null、整数以外、1 未満、または JSON が不正
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: 未対応の HTTP メソッド
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: 未対応のレスポンス形式
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          description: 未対応のリクエスト形式
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: 保存に失敗した。成功は返さない
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/fizzbuzz/{number}:
+    get:
+      operationId: findFizzBuzz
+      summary: 保存済みの FizzBuzz を 1 件取得する
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+          description: 取得する数値
+      responses:
+        '200':
+          description: 保存済みの FizzBuzz
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FizzBuzz'
+              example: {number: 3, value: Fizz}
+        '400':
+          description: number が整数以外
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: 指定した数値が保存されていない
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '406':
+          description: 未対応のレスポンス形式
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+components:
+  schemas:
+    FizzBuzz:
+      type: object
+      required: [number, value]
+      properties:
+        number:
+          type: integer
+          format: int32
+          minimum: 1
+        value:
+          type: string
+          minLength: 1
+          description: 15 の倍数は FizzBuzz、3 の倍数は Fizz、5 の倍数は Buzz、それ以外は数値の文字列
+    Problem:
+      type: object
+      required: [title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
