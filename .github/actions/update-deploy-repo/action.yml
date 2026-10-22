@@ -2,13 +2,17 @@ name: Update image digest in the deploy repository
 description: >-
   配備用リポジトリの clusters/<環境名>/kustomization.yaml にある、指定したイメージの digest を書き換えて main にコミットする。
   Flux がそのコミットを検知して、クラスターに反映する。
+  書き込みには GitHub App のトークン (有効期限 1 時間、配備用リポジトリだけ、contents の書き込みだけ) を使う。
 
 inputs:
   deploy-repository:
-    description: 配備用リポジトリ (owner/repo)
+    description: 配備用リポジトリの名前 (owner は、このワークフローのリポジトリと同じ)
     required: true
-  ssh-key:
-    description: 配備用リポジトリに書き込めるデプロイキーの秘密鍵 (そのリポジトリだけに登録した、読み書き可のキー)
+  app-client-id:
+    description: 配備用リポジトリに書き込める GitHub App の Client ID
+    required: true
+  app-private-key:
+    description: 上記 GitHub App の秘密鍵
     required: true
   environment:
     description: 環境名。clusters/<環境名>/kustomization.yaml を更新する
@@ -23,11 +27,24 @@ inputs:
 runs:
   using: composite
   steps:
+    # 配備用リポジトリ 1 つ、contents の書き込みだけに絞った、短命のトークンを発行する。
+    # トークンは、このアクションの終了時に自動で失効する
+    - name: Create a token for the deploy repository
+      id: token
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.app-client-id }}
+        private-key: ${{ inputs.app-private-key }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ inputs.deploy-repository }}
+        permission-contents: write
+
     - name: Update digest and push
       shell: bash
       env:
-        DEPLOY_REPO: ${{ inputs.deploy-repository }}
-        SSH_KEY: ${{ inputs.ssh-key }}
+        DEPLOY_REPO: ${{ github.repository_owner }}/${{ inputs.deploy-repository }}
+        TOKEN: ${{ steps.token.outputs.token }}
+        APP_SLUG: ${{ steps.token.outputs.app-slug }}
         ENVIRONMENT: ${{ inputs.environment }}
         IMAGE_NAME: ${{ inputs.image-name }}
         DIGEST: ${{ inputs.digest }}
@@ -36,21 +53,22 @@ runs:
       run: |
         set -euo pipefail
 
-        KEY="$RUNNER_TEMP/deploy_key"
-        KNOWN_HOSTS="$RUNNER_TEMP/known_hosts"
         WORK="$RUNNER_TEMP/deploy"
-        trap 'rm -rf "$KEY" "$WORK"' EXIT
+        trap 'rm -rf "$WORK"' EXIT
 
-        (umask 077; printf '%s\n' "$SSH_KEY" > "$KEY")
+        # トークンは URL ではなく HTTP ヘッダーで渡す (ログやリモート設定に残さない)
+        AUTH="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
+        echo "::add-mask::$AUTH"
+        export GIT_CONFIG_COUNT=1
+        export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+        export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${AUTH}"
 
-        # GitHub が公開している SSH のホスト鍵 (HTTPS の API で取得) を信頼し、それ以外の相手には接続しない
-        curl -fsS https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > "$KNOWN_HOSTS"
-        export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o StrictHostKeyChecking=yes"
-
-        git clone --quiet --depth 1 "git@github.com:${DEPLOY_REPO}.git" "$WORK"
+        git clone --quiet --depth 1 "https://github.com/${DEPLOY_REPO}.git" "$WORK"
         cd "$WORK"
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        # コミットの作成者は、この GitHub App 自身にする (履歴から、どの App が更新したか分かる)
+        BOT_ID="$(curl -fsS "https://api.github.com/users/${APP_SLUG}%5Bbot%5D" | jq -r .id)"
+        git config user.name "${APP_SLUG}[bot]"
+        git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
 
         FILE="clusters/${ENVIRONMENT}/kustomization.yaml"
         SHORT="${DIGEST:0:19}"

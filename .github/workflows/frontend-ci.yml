@@ -121,8 +121,9 @@ jobs:
 
       - uses: ./.github/actions/update-deploy-repo
         with:
-          deploy-repository: ${{ github.repository_owner }}/fizzbuzz-deploy
-          ssh-key: ${{ secrets.DEPLOY_REPO_SSH_KEY }}
+          deploy-repository: fizzbuzz-deploy
+          app-client-id: ${{ vars.DEPLOY_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.DEPLOY_APP_PRIVATE_KEY }}
           environment: staging
           image-name: fizzbuzz-frontend
           digest: ${{ needs.image.outputs.digest }}
