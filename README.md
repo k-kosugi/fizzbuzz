@@ -15,9 +15,29 @@ FizzBuzz を 1 件ずつ保存・取得する Web アプリケーションです
 1. ビルドとテスト (backend は `./mvnw verify`、frontend は lint とビルド)
 2. イメージのビルドと Trivy のスキャン (修正版がある HIGH/CRITICAL があれば失敗)
 3. **`main` への push のときだけ**、Azure に OIDC でログインし、スキャンしたイメージと同一のものを ACR に push (タグはコミット SHA)
+4. **`main` への push のときだけ**、配備用リポジトリ [fizzbuzz-deploy](https://github.com/k-kosugi/fizzbuzz-deploy) の `clusters/staging/kustomization.yaml` の digest を、push したイメージのものに更新してコミット
 
 push 先のイメージは `<ACR 名>.azurecr.io/fizzbuzz-backend:<コミット SHA>` と `fizzbuzz-frontend:<コミット SHA>` です。digest は、各ジョブのサマリーに表示されます。
 PR では、スキャンまでで止まります。
+
+### staging への自動配備
+
+4 の更新後は、AKS 上の Flux が配備用リポジトリの変更を検知して (最大 60 秒)、クラスターに反映します。
+
+```text
+fizzbuzz の main に push
+  -> CI: ビルド、テスト、スキャン、ACR に push
+  -> CI: fizzbuzz-deploy の digest を更新 (コミット)
+  -> Flux: 変更を検知して AKS に反映
+```
+
+- 更新の処理は、複合アクション [update-deploy-repo](./.github/actions/update-deploy-repo) です。digest が変わらないとき (イメージの中身が同一のとき) は、コミットしません。
+- `fizzbuzz-deploy` への書き込みには、**そのリポジトリだけに登録した、読み書き可のデプロイキー**を使います。秘密鍵は、このリポジトリのシークレット `DEPLOY_REPO_SSH_KEY` に保存しています。
+- backend と frontend が同時に更新して競合した場合は、最新を取り直して再試行します。
+- 古いコミットの CI が、新しいコミットの CI より後に終わると、古い digest で上書きされることがあります。短時間に連続して push しないでください。
+- 本番への昇格は、まだ含まれていません。
+
+デプロイキーを作り直すときは、`fizzbuzz-deploy` の Settings > Deploy keys で、読み書き可の公開鍵を登録し、秘密鍵を `DEPLOY_REPO_SSH_KEY` に設定します。
 
 必要なリポジトリの Variables (`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、`ACR_NAME`、`AZURE_BUILD_CLIENT_ID`) は、[infrastructure/README.md](./infrastructure/README.md) を参照してください。
 

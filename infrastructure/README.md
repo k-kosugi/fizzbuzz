@@ -119,5 +119,5 @@ export FLUX_HTTPS_KEY=<読み取り専用のトークン>
 - Microsoft Defender for Containers の有効化 (サブスクリプション単位の設定)
 - Ingress コントローラー、証明書、DNS
 - 配備用リポジトリ (`fizzbuzz-deploy`) の作成と、初期のマニフェスト
-- GitHub Actions のワークフローのうち、AKS へのデプロイと配備用リポジトリの更新 (ACR への push は `backend-ci` と `frontend-ci` が行います)
+- 本番への昇格 (ACR への push と、staging の配備用リポジトリの更新は `backend-ci` と `frontend-ci` が行います)
 - 閉域化 (プライベートクラスター、ACR のプライベートエンドポイント)
