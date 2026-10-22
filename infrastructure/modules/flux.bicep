@@ -11,8 +11,11 @@ param repositoryUrl string = ''
 
 param branch string = 'main'
 
-@description('リポジトリ内の、このクラスターに適用するディレクトリ。Kustomize または Helm の入口を置く')
+@description('リポジトリ内の、このクラスターに適用するディレクトリ。Kustomize または Helm の入口を置く。config はこの下の config ディレクトリを使う')
 param path string = './'
+
+@description('リポジトリ内の、クラスター共通のコントローラー (cert-manager など) を置くディレクトリ')
+param controllersPath string = './platform/controllers'
 
 @description('private リポジトリの場合の HTTPS ユーザー名。public リポジトリなら空')
 param httpsUser string = ''
@@ -26,7 +29,7 @@ param syncIntervalInSeconds int = 60
 
 var useAuth = !empty(httpsUser) && !empty(httpsKey)
 
-resource cluster 'Microsoft.ContainerService/managedClusters@2025-10-01' existing = {
+resource cluster 'Microsoft.ContainerService/managedClusters@2026-03-01' existing = {
   name: clusterName
 }
 
@@ -68,7 +71,29 @@ resource configuration 'Microsoft.KubernetesConfiguration/fluxConfigurations@202
           httpsKey: base64(httpsKey)
         }
       : {}
+    // 3 つの Kustomization に分ける。
+    //   controllers : クラスター共通のコントローラー (cert-manager)。HelmRelease が Ready になるまで待つ
+    //   config      : controllers の CRD を使う設定 (ClusterIssuer、Gateway)。controllers の後に適用する
+    //   apps        : アプリ本体。TLS や Gateway の失敗に引きずられないよう、他に依存させない
     kustomizations: {
+      controllers: {
+        path: controllersPath
+        timeoutInSeconds: 600
+        syncIntervalInSeconds: syncIntervalInSeconds
+        retryIntervalInSeconds: 120
+        prune: true
+        force: false
+        wait: true
+      }
+      config: {
+        path: '${path}/config'
+        dependsOn: ['controllers']
+        timeoutInSeconds: 600
+        syncIntervalInSeconds: syncIntervalInSeconds
+        retryIntervalInSeconds: 120
+        prune: true
+        force: false
+      }
       apps: {
         path: path
         timeoutInSeconds: 600

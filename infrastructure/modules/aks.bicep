@@ -29,7 +29,10 @@ param availabilityZones string[] = []
 @description('クラスターの管理者にする Entra ID グループのオブジェクト ID')
 param adminGroupObjectIds string[] = []
 
-resource cluster 'Microsoft.ContainerService/managedClusters@2025-10-01' = {
+@description('Kubernetes Gateway API を有効にする。マネージドの Gateway API の CRD と、アプリケーションルーティングの Gateway API 実装 (GatewayClass: approuting-istio) を導入する。Istio のサービスメッシュ アドオンとは同時に有効にできない')
+param enableGatewayApi bool = true
+
+resource cluster 'Microsoft.ContainerService/managedClusters@2026-03-01' = {
   name: name
   location: location
   tags: tags
@@ -85,6 +88,20 @@ resource cluster 'Microsoft.ContainerService/managedClusters@2025-10-01' = {
       upgradeChannel: 'patch'
       nodeOSUpgradeChannel: 'NodeImage'
     }
+    ingressProfile: enableGatewayApi
+      ? {
+          gatewayAPI: {
+            installation: 'Standard'
+          }
+          webAppRouting: {
+            gatewayAPIImplementations: {
+              appRoutingIstio: {
+                mode: 'Enabled'
+              }
+            }
+          }
+        }
+      : null
   }
 }
 

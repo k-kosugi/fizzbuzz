@@ -78,7 +78,7 @@ resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/f
   }
 }
 
-resource cluster 'Microsoft.ContainerService/managedClusters@2025-10-01' existing = {
+resource cluster 'Microsoft.ContainerService/managedClusters@2026-03-01' existing = {
   name: clusterName
 }
 

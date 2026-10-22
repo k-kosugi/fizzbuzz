@@ -97,6 +97,11 @@ az deployment sub create \
 - **現在は、配備用リポジトリ [k-kosugi/fizzbuzz-deploy](https://github.com/k-kosugi/fizzbuzz-deploy) (public) を接続しています。** 各クラスターは `<fluxPathPrefix>/<環境名>` (既定は `./clusters/staging`) を監視し、変更を自動で反映します。マニフェストの構成と、配備するバージョンの変え方は、そのリポジトリの README を参照してください。
 - 別のリポジトリを使うときは、リポジトリを作り、初期のマニフェストを push してから、`fluxRepositoryUrl` を指定して再デプロイします。
 - 確認間隔は 60 秒です。Git から削除したリソースは、クラスターからも削除されます (`prune`)。
+- Flux の構成は、次の 3 つの Kustomization に分かれています。
+  - `controllers` (`./platform/controllers`): cert-manager など、クラスター共通のコントローラー。HelmRelease が Ready になるまで待ちます。
+  - `config` (`<fluxPathPrefix>/<環境名>/config`): ClusterIssuer と Gateway。`controllers` の後に適用します。
+  - `apps` (`<fluxPathPrefix>/<環境名>`): アプリ本体。TLS や Gateway の失敗に引きずられないよう、他に依存しません。
+- AKS の Flux 拡張は、HelmRelease をその namespace の `flux-applier` として実行します。権限を持つのは `flux-system` のものだけなので、HelmRelease は `flux-system` に置き、導入先を `targetNamespace` で指定します。
 
 ```bash
 # 配備用リポジトリを接続する (public リポジトリの場合)
@@ -113,11 +118,34 @@ export FLUX_HTTPS_KEY=<読み取り専用のトークン>
 - Flux は、namespace `fizzbuzz` にもクラスターの管理者権限で反映します。GitOps で配備する場合、GitHub Actions のデプロイ用 ID (namespace への書き込み権限) は不要になります。
 - `Microsoft.KubernetesConfiguration` と `Microsoft.ContainerService` のリソースプロバイダーが、サブスクリプションで登録されている必要があります。未登録の場合は、`az provider register --namespace Microsoft.KubernetesConfiguration` を実行してください。
 
+## 外部公開 (Gateway API と HTTPS)
+
+AKS のアプリケーションルーティングの **Gateway API 実装** (`approuting-istio`) で、アプリを外部に公開しています。Bicep で有効にするのは、次の 2 つです ([aks.bicep](./modules/aks.bicep) の `enableGatewayApi`)。
+
+- マネージドの Gateway API の CRD (`ingressProfile.gatewayAPI.installation: Standard`)
+- アプリケーションルーティングの Gateway API 実装 (`appRoutingIstio`)
+
+Istio のサービスメッシュ アドオンとは、同時に有効にできません。
+
+Gateway、HTTPRoute、証明書の発行元は、配備用リポジトリ `fizzbuzz-deploy` で管理します。
+
+- **公開 URL**: `https://fizzbuzz-kkosugi.japaneast.cloudapp.azure.com/`
+  - 独自ドメインは使わず、Gateway のパブリック IP に付けた **Azure の DNS 名** (`<名前>.<リージョン>.cloudapp.azure.com`、無料) を使います。名前は、`fizzbuzz-deploy` の Gateway の注釈 `service.beta.kubernetes.io/azure-dns-label-name` で決めています。
+  - `/api` は backend、それ以外は frontend に振り分けます。HTTP (80) は HTTPS に転送します。
+- **証明書**: cert-manager が、Let's Encrypt から HTTP-01 で取得し、自動で更新します。
+- **通信の許可**: アプリの namespace は、同じ namespace からの通信だけを許可しています。Gateway の namespace (`gateway`) からの通信は、`fizzbuzz-deploy` の NetworkPolicy で追加で許可しています。
+
+注意点は次のとおりです。
+
+- **認証はありません。** 誰でも保存と取得ができます。URL を共有しないでください。
+- 別の名前にするときは、`fizzbuzz-deploy` の Gateway の `azure-dns-label-name` と、リスナーの `hostname` の両方を変更してください。名前は、リージョン内で一意にする必要があります。
+- Let's Encrypt の発行数の制限に当たらないよう、変更の検証には、試験用の発行元 `letsencrypt-staging` を使ってください (ブラウザーは信頼しません)。
+- 登録用のメールアドレスは設定していないため、証明書の期限の通知メールは届きません。更新は cert-manager が自動で行います。
+
 ## このテンプレートに含まれないもの
 
 - 監視 (Container insights、Managed Prometheus、Log Analytics)
 - Microsoft Defender for Containers の有効化 (サブスクリプション単位の設定)
-- Ingress コントローラー、証明書、DNS
 - 配備用リポジトリ (`fizzbuzz-deploy`) の作成と、初期のマニフェスト
 - 本番への昇格 (ACR への push と、staging の配備用リポジトリの更新は `backend-ci` と `frontend-ci` が行います)
 - 閉域化 (プライベートクラスター、ACR のプライベートエンドポイント)
