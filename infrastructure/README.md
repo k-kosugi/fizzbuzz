@@ -94,7 +94,8 @@ az deployment sub create \
 各 AKS に、GitOps 拡張 (`microsoft.flux`) で Flux v2 を導入します。
 
 - **Flux の導入は常に行います。** `fluxRepositoryUrl` が空の間は、導入だけです。
-- **配備用リポジトリ (例: `fizzbuzz-deploy`) を作り、初期のマニフェストを push してから、`fluxRepositoryUrl` を指定して再デプロイします。** すると、各クラスターは `<fluxPathPrefix>/<環境名>` (既定は `./clusters/staging`) を監視し、変更を自動で反映します。
+- **現在は、配備用リポジトリ [k-kosugi/fizzbuzz-deploy](https://github.com/k-kosugi/fizzbuzz-deploy) (public) を接続しています。** 各クラスターは `<fluxPathPrefix>/<環境名>` (既定は `./clusters/staging`) を監視し、変更を自動で反映します。マニフェストの構成と、配備するバージョンの変え方は、そのリポジトリの README を参照してください。
+- 別のリポジトリを使うときは、リポジトリを作り、初期のマニフェストを push してから、`fluxRepositoryUrl` を指定して再デプロイします。
 - 確認間隔は 60 秒です。Git から削除したリソースは、クラスターからも削除されます (`prune`)。
 
 ```bash

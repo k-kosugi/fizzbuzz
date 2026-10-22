@@ -22,8 +22,7 @@ param appNamespace = 'fizzbuzz'
 // Flux (GitOps) が監視する配備用リポジトリ。空の間は、Flux の導入だけを行う。
 // リポジトリを作成して初期のマニフェストを push したら、URL を指定して再デプロイする。
 // 各クラスターは <fluxPathPrefix>/<環境名> (例: ./clusters/staging) を監視する。
-param fluxRepositoryUrl = ''
-// param fluxRepositoryUrl = 'https://github.com/kentakosugi_microsoft/fizzbuzz-deploy'
+param fluxRepositoryUrl = 'https://github.com/k-kosugi/fizzbuzz-deploy'
 param fluxBranch = 'main'
 param fluxPathPrefix = './clusters'
 // private リポジトリの場合は、読み取り専用のトークンを環境変数で渡す (ファイルに保存しない)
