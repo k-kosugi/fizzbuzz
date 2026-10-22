@@ -8,6 +8,19 @@ FizzBuzz を 1 件ずつ保存・取得する Web アプリケーションです
 | [frontend/](./frontend) | 画面 (React 19 / TypeScript / Vite) |
 | [infrastructure/](./infrastructure) | Azure の基盤 (Bicep: ACR、AKS) |
 
+## CI (GitHub Actions)
+
+`backend-ci` と `frontend-ci` が、次の順に実行します。
+
+1. ビルドとテスト (backend は `./mvnw verify`、frontend は lint とビルド)
+2. イメージのビルドと Trivy のスキャン (修正版がある HIGH/CRITICAL があれば失敗)
+3. **`main` への push のときだけ**、Azure に OIDC でログインし、スキャンしたイメージと同一のものを ACR に push (タグはコミット SHA)
+
+push 先のイメージは `<ACR 名>.azurecr.io/fizzbuzz-backend:<コミット SHA>` と `fizzbuzz-frontend:<コミット SHA>` です。digest は、各ジョブのサマリーに表示されます。
+PR では、スキャンまでで止まります。
+
+必要なリポジトリの Variables (`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、`ACR_NAME`、`AZURE_BUILD_CLIENT_ID`) は、[infrastructure/README.md](./infrastructure/README.md) を参照してください。
+
 ## 必要なもの
 
 - JDK 25
