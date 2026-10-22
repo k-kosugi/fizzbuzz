@@ -28,6 +28,10 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<!-- Spring Boot 4.1.1 が管理するバージョンに脆弱性 (Trivy: CVE-2026-65182 など) があるため、修正版に上書きする。
+		     Spring Boot が修正版を取り込んだら、この 2 行は削除する -->
+		<tomcat.version>11.0.25</tomcat.version>
+		<jackson-bom.version>3.1.7</jackson-bom.version>
 	</properties>
 	<dependencies>
 		<dependency>
